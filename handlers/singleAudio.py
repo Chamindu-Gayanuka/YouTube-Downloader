@@ -1,4 +1,4 @@
-import youtube_dl
+import yt_dlp as youtube_dl
 
 def download_audio(url):
     ydl_opts = {

@@ -1,4 +1,4 @@
-import youtube_dl
+import yt_dlp as youtube_dl
 
 def download_video(url, quality='best'):
     ydl_opts = {
