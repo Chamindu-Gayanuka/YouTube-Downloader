@@ -1,49 +1,27 @@
-import yt_dlp as youtube_dl
-from tempfile import NamedTemporaryFile
+import yt_dlp
+import os
 
-class AudioObj:
-    def __init__(self, path, name):
-        self.path = path
-        self.name = name
+def download_playlist_audio(url: str, quality: str) -> list:
+    output_dir = "downloads"
+    os.makedirs(output_dir, exist_ok=True)
 
-    def __str__(self):
-        return self.path
-
-def download_playlist_audio(url: str):
     ydl_opts = {
-        "format": "bestaudio/best",
-        "noplaylist": False,
-        "extract_flat": "in_playlist",
+        "format": f"bestaudio[abr<={quality}]",
+        "outtmpl": os.path.join(output_dir, "%(title)s.%(ext)s"),
         "quiet": True,
+        "noplaylist": False,
+        "prefer_ffmpeg": True,
+        "postprocessors": [
+            {
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": quality,
+            }
+        ],
     }
 
-    with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-        info_dict = ydl.extract_info(url, download=False)
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        result = ydl.download([url])
 
-        if "entries" not in info_dict:
-            raise Exception("No audio found in playlist.")
-
-        audio_files = []
-
-        for entry in info_dict["entries"]:
-            if not entry:
-                continue
-
-            video_url = entry.get("url")
-            title = entry.get("title", "audio")
-
-            with youtube_dl.YoutubeDL({
-                "format": "bestaudio/best",
-                "outtmpl": "%(title)s.%(ext)s",
-                "postprocessors": [{
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "mp3",
-                    "preferredquality": "192",
-                }],
-                "quiet": True
-            }) as audio_ydl:
-                temp = NamedTemporaryFile(delete=False, suffix=".mp3")
-                audio_ydl.download([f"https://www.youtube.com/watch?v={entry['id']}"])
-                audio_files.append(AudioObj(temp.name, title + ".mp3"))
-
-        return audio_files
+    files = [os.path.join(output_dir, f) for f in os.listdir(output_dir) if f.endswith(".mp3")]
+    return files

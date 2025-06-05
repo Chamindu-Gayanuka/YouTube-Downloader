@@ -1,44 +1,21 @@
-import yt_dlp as youtube_dl
-from tempfile import NamedTemporaryFile
+import yt_dlp
+import os
 
-class VideoObj:
-    def __init__(self, path, name):
-        self.path = path
-        self.name = name
+def download_playlist_video(url: str, quality: str) -> list:
+    output_dir = "downloads"
+    os.makedirs(output_dir, exist_ok=True)
 
-    def __str__(self):
-        return self.path
-
-def download_playlist_video(url: str):
     ydl_opts = {
+        "format": f"bestvideo[height<={quality}]+bestaudio/best",
+        "outtmpl": os.path.join(output_dir, "%(title)s.%(ext)s"),
         "quiet": True,
-        "extract_flat": "in_playlist",
         "noplaylist": False,
-        "format": "best",
+        "prefer_ffmpeg": True,
+        "merge_output_format": "mp4",
     }
 
-    with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-        info_dict = ydl.extract_info(url, download=False)
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        result = ydl.download([url])
 
-        if "entries" not in info_dict:
-            raise Exception("No videos found in playlist.")
-
-        video_files = []
-
-        for entry in info_dict["entries"]:
-            if not entry:
-                continue
-
-            video_id = entry.get("id")
-            title = entry.get("title", "video")
-
-            with youtube_dl.YoutubeDL({
-                "format": "best[ext=mp4]/best",
-                "outtmpl": "%(title)s.%(ext)s",
-                "quiet": True
-            }) as video_ydl:
-                temp = NamedTemporaryFile(delete=False, suffix=".mp4")
-                video_ydl.download([f"https://www.youtube.com/watch?v={video_id}"])
-                video_files.append(VideoObj(temp.name, title + ".mp4"))
-
-        return video_files
+    files = [os.path.join(output_dir, f) for f in os.listdir(output_dir) if f.endswith(".mp4")]
+    return files

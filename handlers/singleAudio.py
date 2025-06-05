@@ -1,31 +1,41 @@
-import yt_dlp as youtube_dl
-from tempfile import NamedTemporaryFile
+import yt_dlp
+from io import BytesIO
 
-class AudioObj:
-    def __init__(self, path, name):
-        self.path = path
-        self.name = name
-
-    def __str__(self):
-        return self.path
-
-def download_audio(url: str) -> AudioObj:
+def download_audio(url: str, quality: str) -> BytesIO:
     ydl_opts = {
-        "format": "bestaudio/best",
+        "format": f"bestaudio[abr<={quality}]",
+        "outtmpl": "-",
+        "quiet": True,
+        "noplaylist": True,
+        "prefer_ffmpeg": True,
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
                 "preferredcodec": "mp3",
-                "preferredquality": "192"
+                "preferredquality": quality,
             }
         ],
-        "outtmpl": "%(title)s.%(ext)s",
-        "quiet": True,
     }
 
-    with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        title = info.get("title", "audio")
-        temp = NamedTemporaryFile(delete=False, suffix=".mp3")
+    buffer = BytesIO()
+    buffer.name = "audio.mp3"
+
+    def hook(d):
+        if d['status'] == 'finished' and 'filename' in d:
+            buffer.name = d['filename']
+
+    ydl_opts['progress_hooks'] = [hook]
+    ydl_opts['outtmpl'] = "-"  # Output to stdout
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        result = ydl.extract_info(url, download=False)
+        title = result.get("title", "audio")
+        ext = result.get("ext", "mp3")
+        buffer.name = f"{title}.{ext}"
+
         ydl.download([url])
-        return AudioObj(temp.name, title + ".mp3")
+        with open(buffer.name, "rb") as f:
+            buffer.write(f.read())
+        buffer.seek(0)
+
+    return buffer
