@@ -1,14 +1,15 @@
 import os
-from os import getenv
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
 
-API_ID = int(os.getenv("API_ID", ""))
-API_HASH = os.getenv("API_HASH", "")
-BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+API_ID = int(os.environ.get("API_ID"))
+API_HASH = os.environ.get("API_HASH", "")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 
-MONGO_URI = os.getenv("MONGO_URI", "")
-DUMP_CHANNEL = int(os.getenv("DUMP_CHANNEL", ""))
-ADMIN_USERS = int(os.getenv("ADMIN_USERS", ""))
+MONGO_URI = os.environ.get("MONGO_URI", "")
+DB_NAME = "youtube_bot"
+
+DUMP_CHANNEL = int(os.environ.get("DUMP_CHANNEL"))
+ADMIN_USERS = list(map(int, os.environ.get("ADMIN_USERS", "").split(",")))

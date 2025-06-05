@@ -1,25 +1,17 @@
 from pyrogram import Client, filters
-from pyrogram.types import (
-    Message,
-    InlineKeyboardMarkup,
-    InlineKeyboardButton,
-    CallbackQuery,
-)
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from config import API_ID, API_HASH, BOT_TOKEN, DUMP_CHANNEL, ADMIN_USERS
 from database import add_user, get_all_users, count_users
 from fileFormat import get_format_buttons, get_delivery_type_buttons
-
 from handlers.singleVideo import download_video
 from handlers.singleAudio import download_audio
-
-import os
 import asyncio
+import time
 
 user_data = {}
 
 app = Client("yt_downloader_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-# Start Command
 @app.on_message(filters.command("start"))
 async def start_handler(client, message: Message):
     user_id = message.from_user.id
@@ -30,7 +22,6 @@ async def start_handler(client, message: Message):
     )
     await message.reply("👋 Welcome to YouTube Downloader Bot!\n\nSend any YouTube link to download video or audio.")
 
-# Help Command
 @app.on_message(filters.command("help"))
 async def help_handler(client, message: Message):
     await message.reply(
@@ -42,23 +33,19 @@ async def help_handler(client, message: Message):
         "Supports both Single Videos and Playlists."
     )
 
-# Settings
 @app.on_message(filters.command("settings"))
 async def settings_handler(client, message: Message):
     await message.reply("Choose format:", reply_markup=get_format_buttons())
 
-# Admin: Users
 @app.on_message(filters.command("users") & filters.user(ADMIN_USERS))
 async def users_handler(client, message: Message):
     total = count_users()
     await message.reply(f"👤 Total Users: `{total}`")
 
-# Admin: Status
 @app.on_message(filters.command("status") & filters.user(ADMIN_USERS))
 async def status_handler(client, message: Message):
     await message.reply("✅ Bot is up and running!")
 
-# Admin: Broadcast
 @app.on_message(filters.command("broadcast") & filters.user(ADMIN_USERS))
 async def broadcast_handler(client, message: Message):
     if not message.reply_to_message:
@@ -74,7 +61,6 @@ async def broadcast_handler(client, message: Message):
             continue
     await message.reply(f"✅ Broadcast sent to `{sent}` users.")
 
-# Handle URLs
 @app.on_message(filters.text & filters.private)
 async def handle_youtube_url(client, message: Message):
     url = message.text.strip()
@@ -83,7 +69,6 @@ async def handle_youtube_url(client, message: Message):
     user_data[message.from_user.id] = {"url": url}
     await message.reply("📦 Choose format:", reply_markup=get_format_buttons())
 
-# Callback for format (mp4/mp3)
 @app.on_callback_query(filters.regex("format_"))
 async def format_callback(client, callback_query: CallbackQuery):
     format_type = callback_query.data.split("_")[1]
@@ -93,7 +78,6 @@ async def format_callback(client, callback_query: CallbackQuery):
     user_data[user_id]["format"] = format_type
     await callback_query.message.edit("📤 Choose delivery type:", reply_markup=get_delivery_type_buttons())
 
-# Callback for delivery type
 @app.on_callback_query(filters.regex("as_"))
 async def delivery_callback(client, callback_query: CallbackQuery):
     delivery = callback_query.data.split("_")[1]
@@ -110,30 +94,54 @@ async def delivery_callback(client, callback_query: CallbackQuery):
     await callback_query.message.edit("⏳ Downloading... Please wait.")
 
     try:
-        if file_format == "mp4":
-            filepath = download_video(url)
-        elif file_format == "mp3":
-            filepath = download_audio(url)
-        else:
-            return await callback_query.message.edit("⚠️ Invalid format selected.")
+        file_obj = download_video(url) if file_format == "mp4" else download_audio(url)
     except Exception as e:
         return await callback_query.message.edit(f"❌ Download failed:\n`{e}`")
 
+    start_time = time.time()
+    uploading_msg = await callback_query.message.reply("📤 Uploading...")
+
     try:
-        caption = f"🎬 `{os.path.basename(filepath)}`"
-        await callback_query.message.reply_document(
-            document=filepath if is_doc else filepath,
-            caption=caption
-        ) if is_doc else await callback_query.message.reply_video(video=filepath, caption=caption)
-
-        # Log download to dump channel
-        await client.send_document(DUMP_CHANNEL, document=filepath, caption=f"User: `{user_id}` | {file_format.upper()}")
+        caption = f"🎬 `{getattr(file_obj, 'name', 'video')}`"
+        if file_format == "mp4" and not is_doc:
+            await client.send_video(
+                chat_id=callback_query.message.chat.id,
+                video=file_obj,
+                caption=caption,
+                progress=progress_bar,
+                progress_args=(uploading_msg, start_time)
+            )
+        else:
+            await client.send_document(
+                chat_id=callback_query.message.chat.id,
+                document=file_obj,
+                caption=caption,
+                progress=progress_bar,
+                progress_args=(uploading_msg, start_time)
+            )
+        await client.send_document(DUMP_CHANNEL, document=file_obj, caption=f"User: `{user_id}` | {file_format.upper()}")
     except Exception as e:
-        await callback_query.message.edit(f"⚠️ Upload failed:\n`{e}`")
-    finally:
-        if os.path.exists(filepath):
-            os.remove(filepath)
-        user_data.pop(user_id, None)
+        await uploading_msg.edit(f"⚠️ Upload failed:\n`{e}`")
 
-# Run the bot
+    user_data.pop(user_id, None)
+    await uploading_msg.delete()
+
+async def progress_bar(current, total, message: Message, start):
+    now = time.time()
+    diff = now - start
+    if diff % 5 == 0 or current == total:
+        percent = current * 100 / total
+        speed = current / diff
+        eta = (total - current) / speed if speed != 0 else 0
+        bar = ("▰" * int(percent // 10)) + ("▱" * (10 - int(percent // 10)))
+        text = (
+            f"📤 Uploading...\n[{bar}] {percent:.2f}%\n"
+            f"{current / 1024 / 1024:.2f}MB of {total / 1024 / 1024:.2f}MB\n"
+            f"Speed: {speed / 1024:.2f} KB/s\nETA: {int(eta)}s"
+        )
+        try:
+            await message.edit(text)
+        except:
+            pass
+
 app.run()

@@ -1,18 +1,24 @@
 from pymongo import MongoClient
-from config import MONGO_URI
+import os
 
+# Load from environment variables or use default MongoDB URI
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
 client = MongoClient(MONGO_URI)
-db = client['yt_bot']
 
-def add_user(user_id, username, first_name):
-    db.users.update_one(
-        {"_id": user_id},
-        {"$set": {"username": username, "first_name": first_name}},
-        upsert=True
-    )
+# Database and collection
+db = client["yt_downloader_bot"]
+users_collection = db["users"]
 
-def get_all_users():
-    return list(db.users.find())
+def add_user(user_id, username=None, first_name=None):
+    if not users_collection.find_one({"_id": user_id}):
+        users_collection.insert_one({
+            "_id": user_id,
+            "username": username,
+            "first_name": first_name
+        })
 
 def count_users():
-    return db.users.count_documents({})
+    return users_collection.count_documents({})
+
+def get_all_users():
+    return users_collection.find({})

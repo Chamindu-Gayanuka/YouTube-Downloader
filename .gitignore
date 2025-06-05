@@ -1,5 +1,41 @@
-.idea
-.vscode
-.venv
-.env
-__pycache__
+# Python-related
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+
+# Virtual environment
+venv/
+env/
+ENV/
+.venv/
+
+# IDE/editor
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS-generated
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log
+
+# Youtube downloader temp/cache files
+*.part
+*.temp
+*.mkv
+*.mp4
+*.webm
+*.mp3
+
+# Telegram session
+*.session
+yt_downloader_bot.session
+
+# Other
+config.py
+dump.json
